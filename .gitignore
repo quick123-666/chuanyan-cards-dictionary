@@ -1,0 +1,4 @@
+_shots/
+_backup/
+*.log
+.DS_Store
