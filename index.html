@@ -211,6 +211,7 @@
   .audio-bar {
     position: absolute; top: 18px; left: 22px;
     display: flex; gap: 10px; z-index: 6;
+    width: 300px;
   }
   .audio-btn {
     width: 40px; height: 40px;
@@ -240,47 +241,64 @@
     background: #a03028;
   }
 
-  /* 迷你音频条（有录音时显示） */
+  /* 迷你音频条（有录音时显示，每段一行） */
   .audio-widget {
     display: none;
-    align-items: center; gap: 8px;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 4px;
+    flex: 1;
+  }
+  .audio-widget.show { display: flex; }
+  .seg-item {
+    display: flex; align-items: center; gap: 10px;
     height: 40px; padding: 0 12px;
     background: rgba(255, 248, 225, 0.6);
     border: 1px solid rgba(92, 61, 46, 0.4);
     border-radius: 20px;
   }
-  .audio-widget.show { display: flex; }
-  .audio-widget .aw-play {
-    width: 26px; height: 26px; border-radius: 50%;
+  .seg-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(92,61,46,0.2);
+    color: #5c3d2e; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Microsoft YaHei", sans-serif;
+    flex-shrink: 0;
+  }
+  .seg-play {
+    width: 28px; height: 28px; border-radius: 50%;
     background: #a03028; color: #f5ead0;
     border: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
   }
-  .audio-widget .aw-play svg { width: 12px; height: 12px; fill: #f5ead0; }
-  .audio-widget .aw-time {
+  .seg-play-icon { width: 12px; height: 12px; fill: #f5ead0; }
+  .seg-time {
     font-size: 12px; color: #5c3d2e;
     font-family: "Microsoft YaHei", sans-serif;
     min-width: 36px; text-align: center;
+    flex-shrink: 0;
   }
-  .audio-widget .aw-track {
-    width: 100px; height: 4px;
-    background: rgba(92, 61, 46, 0.2);
-    border-radius: 2px;
+  .seg-track {
+    flex: 1; height: 8px;
+    background: rgba(92, 61, 46, 0.35);
+    border-radius: 4px;
     position: relative; cursor: pointer;
     overflow: hidden;
   }
-  .audio-widget .aw-progress {
+  .seg-progress {
     position: absolute; left: 0; top: 0; bottom: 0;
     width: 0%; background: #a03028;
-    border-radius: 2px;
+    border-radius: 3px;
   }
-  .audio-widget .aw-del {
+  .seg-del {
     background: none; border: none;
     color: rgba(92, 61, 46, 0.5);
     cursor: pointer; font-size: 16px;
     padding: 0 4px;
+    flex-shrink: 0;
   }
-  .audio-widget .aw-del:hover { color: #a03028; }
+  .seg-del:hover { color: #a03028; }
   .audio-tip {
     position: absolute; top: 64px; left: 22px;
     background: rgba(44, 24, 16, 0.9);
@@ -294,6 +312,27 @@
     pointer-events: none;
   }
   .audio-tip.show { opacity: 1; }
+
+  /* 列表卡片上的播放按钮（有录音时显示） */
+  .wc-play {
+    position: absolute; top: 12px; right: 12px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(180deg, #a03028 0%, #7a221c 100%);
+    color: #f5ead0; border: none; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(122,34,28,.35);
+    transition: all .2s;
+  }
+  .wc-play.show { display: flex; }
+  .wc-play:hover { transform: scale(1.1); }
+  .wc-play svg { width: 12px; height: 12px; fill: #f5ead0; margin-left: 1px; }
+  .wc-seg-count {
+    position: absolute; top: 14px; right: 48px;
+    font-size: 11px; color: #a03028;
+    background: rgba(255,248,225,0.8);
+    padding: 1px 6px; border-radius: 8px;
+    font-family: "Microsoft YaHei", sans-serif;
+  }
 
   /* ===== 列表视图 ===== */
   .list-wrap { padding: 24px 28px 60px; width: 100%; box-sizing: border-box; }
@@ -309,6 +348,7 @@
     gap: 16px;
   }
   .word-card {
+    position: relative;
     background: linear-gradient(160deg, #f5ead0 0%, #ecdcba 100%);
     border: 1px solid rgba(92, 61, 46, 0.3);
     border-radius: 14px;
@@ -382,16 +422,7 @@
         <button class="audio-btn" id="recBtn" title="录音（或按 R）" onclick="toggleRec()">
           <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3c0 3-2.5 5.1-5 5.1S7 14 7 11H5c0 3.4 2.7 6.2 6 6.7V20h2v-2.3c3.3-.5 6-3.3 6-6.7h-2z"/></svg>
         </button>
-        <div class="audio-widget" id="audioWidget">
-          <button class="aw-play" id="awPlay" onclick="toggleWidgetPlay()">
-            <svg id="awPlayIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          </button>
-          <div class="aw-time" id="awTime">0:00</div>
-          <div class="aw-track" id="awTrack" onclick="seekWidget(event)">
-            <div class="aw-progress" id="awProgress"></div>
-          </div>
-          <button class="aw-del" title="删除录音" onclick="deleteRec()">✕</button>
-        </div>
+        <div class="audio-widget" id="audioWidget"></div>
       </div>
       <div class="audio-tip" id="audioTip"></div>
       <div class="word" id="word"></div>
@@ -1723,6 +1754,7 @@ function render() {
   document.getElementById("example").textContent = c.example;
   document.getElementById("translate").textContent = c.translate;
   document.getElementById("issue").textContent = c.issue;
+  curSeg = 0;  // 切词条时重置段索引
   refreshRecBtn();
 }
 
@@ -1776,12 +1808,27 @@ function renderList() {
   grid.innerHTML = list.map(w => {
     const realIdx = WORDS.indexOf(w);
     const isActive = realIdx === idx;
+    const segs = recMap[w.id] || [];
+    const hasRec = segs.length > 0;
     return `<div class="word-card ${isActive?'active':''}" onclick="goCard(${realIdx})">
+      <button class="wc-play ${hasRec?'show':''}" onclick="event.stopPropagation(); playRec(${w.id})">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      ${segs.length > 1 ? `<span class="wc-seg-count">${segs.length}段</span>` : ''}
       <div class="wc-word">${w.word}</div>
       <div class="wc-py">${w.pinyin} · ${w.pos}</div>
       <div class="wc-def">${w.def.replace("释义：","")}</div>
     </div>`;
   }).join("");
+}
+
+// 列表里点击播放录音（播第一段）
+function playRec(wordId) {
+  const segs = recMap[wordId] || [];
+  if (segs.length === 0) return;
+  if (widgetAudio) { widgetAudio.pause(); widgetAudio = null; }
+  widgetAudio = new Audio(segs[0].url);
+  widgetAudio.play();
 }
 
 // ===== 搜索 =====
@@ -1825,11 +1872,11 @@ function openDB() {
     req.onerror = e => reject(e);
   });
 }
-async function dbPut(wordId, blob) {
+async function dbPut(wordId, index, blob) {
   if (!db) return;
   return new Promise(resolve => {
     const tx = db.transaction("recordings", "readwrite");
-    tx.objectStore("recordings").put({ wordId, blob });
+    tx.objectStore("recordings").put({ wordId, index, blob });
     tx.oncomplete = resolve;
   });
 }
@@ -1837,8 +1884,15 @@ async function dbDel(wordId) {
   if (!db) return;
   return new Promise(resolve => {
     const tx = db.transaction("recordings", "readwrite");
-    tx.objectStore("recordings").delete(wordId);
-    tx.oncomplete = resolve;
+    const store = tx.objectStore("recordings");
+    const req = store.openCursor();
+    req.onsuccess = e => {
+      const cursor = e.target.result;
+      if (cursor) {
+        if (cursor.value.wordId === wordId) cursor.delete();
+        cursor.continue();
+      } else resolve();
+    };
   });
 }
 async function dbLoadAll() {
@@ -1848,7 +1902,12 @@ async function dbLoadAll() {
     const req = tx.objectStore("recordings").getAll();
     req.onsuccess = () => {
       (req.result || []).forEach(r => {
-        recMap[r.wordId] = { blob: r.blob, url: URL.createObjectURL(r.blob) };
+        if (!recMap[r.wordId]) recMap[r.wordId] = [];
+        recMap[r.wordId].push({ blob: r.blob, url: URL.createObjectURL(r.blob) });
+      });
+      // 按index排序
+      Object.keys(recMap).forEach(id => {
+        recMap[id].sort((a,b) => (a.index||0) - (b.index||0));
       });
       resolve();
     };
@@ -1866,8 +1925,9 @@ function showTip(msg) {
 // 播放：有真人录音就播录音，否则用浏览器 TTS
 function playWord() {
   const c = WORDS[idx];
-  if (recMap[c.id]) {
-    const audio = new Audio(recMap[c.id].url);
+  const segs = recMap[c.id] || [];
+  if (segs.length > 0) {
+    const audio = new Audio(segs[0].url);
     audio.play();
     return;
   }
@@ -1882,7 +1942,7 @@ function playWord() {
   }
 }
 
-// 录音按钮：未录→开始录；录中→停止保存；已录→播放录音
+// 录音按钮：未录→开始录；录中→停止保存；已录→追加新一段
 async function toggleRec() {
   const c = WORDS[idx];
   const btn = document.getElementById("recBtn");
@@ -1893,11 +1953,10 @@ async function toggleRec() {
     return;
   }
 
-  // 已录过 → 播放录音
-  if (recMap[c.id]) {
-    const audio = new Audio(recMap[c.id].url);
-    audio.play();
-    showTip("播放已录发音");
+  // 检查是否已满5段
+  const segs = recMap[c.id] || [];
+  if (segs.length >= 5) {
+    showTip("最多录5段，请先删除一段");
     return;
   }
 
@@ -1910,15 +1969,18 @@ async function toggleRec() {
     mediaRecorder.onstop = () => {
       const blob = new Blob(recChunks, { type: "audio/webm" });
       const url = URL.createObjectURL(blob);
-      recMap[c.id] = { url, blob };
+      if (!recMap[c.id]) recMap[c.id] = [];
+      const idx = recMap[c.id].length;
+      recMap[c.id].push({ url, blob, index: idx });
       btn.classList.remove("recording");
       btn.classList.add("has-rec");
       // 停止麦克风
       recStream.getTracks().forEach(t => t.stop());
-      // 写入 IndexedDB（应用一体化，下次打开还在）
-      dbPut(c.id, blob);
-      showTip("已录音并保存");
+      // 写入 IndexedDB
+      dbPut(c.id, idx, blob);
+      showTip(`已录第${idx+1}段（共${recMap[c.id].length}段）`);
       // 刷新迷你条并自动回放
+      curSeg = idx;
       refreshRecBtn();
       if (widgetAudio) widgetAudio.play();
     };
@@ -1932,70 +1994,112 @@ async function toggleRec() {
 
 // 切词条时刷新录音按钮状态
 let widgetAudio = null;
+let curSeg = 0;
 function refreshRecBtn() {
   const c = WORDS[idx];
   const btn = document.getElementById("recBtn");
   const widget = document.getElementById("audioWidget");
-  btn.classList.toggle("has-rec", !!recMap[c.id]);
+  const segs = recMap[c.id] || [];
+  btn.classList.toggle("has-rec", segs.length > 0);
 
   // 停掉旧的
   if (widgetAudio) { widgetAudio.pause(); widgetAudio = null; }
 
-  if (recMap[c.id]) {
+  if (segs.length > 0) {
     widget.classList.add("show");
-    widgetAudio = new Audio(recMap[c.id].url);
-    // 时长
-    widgetAudio.addEventListener("loadedmetadata", () => {
-      document.getElementById("awTime").textContent =
-        Math.floor(widgetAudio.duration / 60) + ":" +
-        String(Math.floor(widgetAudio.duration % 60)).padStart(2, "0");
-    });
-    // 进度
-    widgetAudio.addEventListener("timeupdate", () => {
-      const pct = (widgetAudio.currentTime / widgetAudio.duration * 100) || 0;
-      document.getElementById("awProgress").style.width = pct + "%";
-    });
-    // 播完图标复位
-    widgetAudio.addEventListener("ended", () => {
-      document.getElementById("awPlayIcon").innerHTML = '<path d="M8 5v14l11-7z"/>';
-    });
+    widget.innerHTML = segs.map((seg, i) => `
+      <div class="seg-item" data-seg="${i}">
+        <span class="seg-num">${i+1}</span>
+        <button class="seg-play" onclick="toggleSegPlay(${i})">
+          <svg class="seg-play-icon" data-seg="${i}" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="seg-track" data-seg="${i}" onclick="seekSeg(event, ${i})">
+          <div class="seg-progress" data-seg="${i}"></div>
+        </div>
+        <span class="seg-time" data-seg="${i}">0:00</span>
+        <button class="seg-del" title="删除本段" onclick="deleteSeg(${i})">✕</button>
+      </div>
+    `).join("");
+    // 自动加载第一段
+    loadSegAudio(0);
   } else {
     widget.classList.remove("show");
+    widget.innerHTML = "";
+    curSeg = 0;
   }
 }
 
-// 迷你条：播放/暂停
-function toggleWidgetPlay() {
-  if (!widgetAudio) return;
-  if (widgetAudio.paused) {
-    widgetAudio.play();
-    document.getElementById("awPlayIcon").innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
-  } else {
-    widgetAudio.pause();
-    document.getElementById("awPlayIcon").innerHTML = '<path d="M8 5v14l11-7z"/>';
-  }
+function loadSegAudio(i) {
+  const c = WORDS[idx];
+  const segs = recMap[c.id] || [];
+  if (!segs[i]) return;
+  if (widgetAudio) { widgetAudio.pause(); widgetAudio = null; }
+  widgetAudio = new Audio(segs[i].url);
+  curSeg = i;
+  const timeEl = document.querySelector(`.seg-time[data-seg="${i}"]`);
+  widgetAudio.addEventListener("loadedmetadata", () => {
+    if (timeEl) timeEl.textContent =
+      Math.floor(widgetAudio.duration / 60) + ":" +
+      String(Math.floor(widgetAudio.duration % 60)).padStart(2, "0");
+  });
+  widgetAudio.addEventListener("timeupdate", () => {
+    const bar = document.querySelector(`.seg-progress[data-seg="${i}"]`);
+    if (bar) {
+      const pct = (widgetAudio.currentTime / widgetAudio.duration * 100) || 0;
+      bar.style.width = pct + "%";
+    }
+  });
+  widgetAudio.addEventListener("ended", () => {
+    const icon = document.querySelector(`.seg-play-icon[data-seg="${i}"]`);
+    if (icon) icon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    const bar = document.querySelector(`.seg-progress[data-seg="${i}"]`);
+    if (bar) bar.style.width = "0%";
+  });
 }
 
-// 迷你条：点进度条跳转
-function seekWidget(e) {
-  if (!widgetAudio || !widgetAudio.duration) return;
-  const track = document.getElementById("awTrack");
+function seekSeg(e, i) {
+  if (!widgetAudio || curSeg !== i || !widgetAudio.duration) return;
+  const track = e.currentTarget;
   const rect = track.getBoundingClientRect();
   const pct = (e.clientX - rect.left) / rect.width;
   widgetAudio.currentTime = pct * widgetAudio.duration;
 }
 
-// 删除当前词条录音
-function deleteRec() {
+function toggleSegPlay(i) {
   const c = WORDS[idx];
-  if (widgetAudio) { widgetAudio.pause(); widgetAudio = null; }
-  if (recMap[c.id]) {
-    URL.revokeObjectURL(recMap[c.id].url);
-    delete recMap[c.id];
+  const segs = recMap[c.id] || [];
+  if (!segs[i]) return;
+  // 不是当前段，先加载
+  if (curSeg !== i) {
+    loadSegAudio(i);
+    widgetAudio.play();
+    document.querySelector(`.seg-play-icon[data-seg="${i}"]`).innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+    return;
   }
-  dbDel(c.id);
+  if (widgetAudio.paused) {
+    widgetAudio.play();
+    document.querySelector(`.seg-play-icon[data-seg="${i}"]`).innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+  } else {
+    widgetAudio.pause();
+    document.querySelector(`.seg-play-icon[data-seg="${i}"]`).innerHTML = '<path d="M8 5v14l11-7z"/>';
+  }
+}
+
+function deleteSeg(i) {
+  const c = WORDS[idx];
+  const segs = recMap[c.id] || [];
+  if (!segs[i]) return;
+  if (widgetAudio) { widgetAudio.pause(); widgetAudio = null; }
+  URL.revokeObjectURL(segs[i].url);
+  segs.splice(i, 1);
+  if (segs.length === 0) delete recMap[c.id];
+  // 重存IndexedDB
+  dbDel(c.id).then(() => {
+    if (recMap[c.id]) recMap[c.id].forEach((s, j) => dbPut(c.id, j, s.blob));
+  });
+  curSeg = 0;
   refreshRecBtn();
-  showTip("已删除录音");
+  showTip("已删除本段");
 }
 
 // 初始化
