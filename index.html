@@ -44,6 +44,25 @@
     font-size: 13px;
     font-family: "Microsoft YaHei", sans-serif;
   }
+  .mode-badge {
+    font-size: 11px;
+    font-family: "Microsoft YaHei", sans-serif;
+    padding: 3px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
+  }
+  .mode-badge.on {
+    background: rgba(74, 130, 60, 0.18);
+    color: #3d6b2c;
+    border: 1px solid rgba(74, 130, 60, 0.4);
+  }
+  .mode-badge.off {
+    background: rgba(160, 48, 40, 0.10);
+    color: #8a4034;
+    border: 1px solid rgba(160, 48, 40, 0.28);
+  }
   .search {
     flex: 1; min-width: 200px; max-width: 420px;
     position: relative;
@@ -400,6 +419,7 @@
 <div class="topbar">
   <div class="logo" onclick="goCard(0)">川言</div>
   <div class="brand-sub">四川方言词典</div>
+  <div class="mode-badge off" id="modeBadge">检测中…</div>
   <div class="search">
     <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
     <input type="text" id="searchInput" placeholder="试试搜「舒服」「吹牛」「没用的人」…">
@@ -1857,6 +1877,98 @@ let mediaRecorder = null;
 let recChunks = [];
 let recStream = null;
 
+// ===== 服务器模式：录音落盘到项目 audio/ 目录 =====
+// 有 server.py 时，录音写成 audio/<词条id>.webm，换浏览器也在。
+// 没有服务器（直接双击 index.html，file:// 下 fetch 必失败）时，
+// 自动退回 IndexedDB，保持原来的行为。
+let SERVER_MODE = false;
+let API_BASE = "";              // 空 = 同源；file:// 打开时 = "http://127.0.0.1:8765/"
+
+function setModeBadge(on) {
+  const el = document.getElementById("modeBadge");
+  if (!el) return;
+  el.className = "mode-badge " + (on ? "on" : "off");
+  el.textContent = on ? "● 已连接 · 录音存 audio/" : "○ 离线 · 录音存浏览器";
+  el.title = on
+    ? "服务器模式：录音写入项目 audio/ 目录，可进 git、跨浏览器共用"
+    : "离线模式：录音只存在本浏览器 IndexedDB，清缓存即丢失。启动 server.py 可开启落盘";
+}
+
+// 播放地址：有 API_BASE 就走服务器，否则用同源相对路径
+function audioUrl(id) {
+  return API_BASE ? `${API_BASE}audio/${id}.webm` : `audio/${id}.webm`;
+}
+
+function applyServerIds(ids) {
+  ids.forEach(id => {
+    recMap[id] = [{ url: audioUrl(id), index: 0, fromDisk: true }];
+  });
+}
+
+async function probeServer(base) {
+  const r = await fetch(base + "api/recordings", { cache: "no-store" });
+  if (!r.ok) return null;
+  const data = await r.json();
+  return (data && Array.isArray(data.ids)) ? data : null;
+}
+
+async function detectServer() {
+  // 1) 同源：通过 http:// 打开服务器页面
+  try {
+    const data = await probeServer("");
+    if (data) { API_BASE = ""; SERVER_MODE = true; applyServerIds(data.ids); return true; }
+  } catch (e) {}
+
+  // 2) file:// 打开：相对路径只会指向本地文件，必须用绝对地址挨个试端口
+  if (location.protocol === "file:") {
+    for (let port = 8765; port <= 8775; port++) {
+      const base = `http://127.0.0.1:${port}/`;
+      try {
+        const data = await probeServer(base);
+        if (data) { API_BASE = base; SERVER_MODE = true; applyServerIds(data.ids); return true; }
+      } catch (e) {}
+    }
+  }
+  return false;
+}
+
+async function saveToDisk(wordId, blob) {
+  const r = await fetch(`${API_BASE}api/recordings/${wordId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "audio/webm" },
+    body: blob
+  });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+}
+
+async function deleteFromDisk(wordId) {
+  const r = await fetch(`${API_BASE}api/recordings/${wordId}`, { method: "DELETE" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+}
+
+// 把只存在于 IndexedDB 的旧录音补写到 audio/，服务器已有的保持不动
+async function migrateToDisk() {
+  let moved = 0, failed = 0;
+  for (const key of Object.keys(recMap)) {
+    const id = Number(key);
+    const segs = recMap[id];
+    if (segs.some(s => s.fromDisk)) {          // 服务器已有该词条，丢弃浏览器里的旧副本
+      recMap[id] = segs.filter(s => s.fromDisk);
+      continue;
+    }
+    const local = segs.find(s => s.blob);
+    if (!local) continue;
+    try {
+      await saveToDisk(id, local.blob);
+      recMap[id] = [{ url: audioUrl(id), blob: local.blob, index: 0 }];
+      moved++;
+    } catch (e) {
+      failed++;
+    }
+  }
+  return { moved, failed };
+}
+
 // ===== IndexedDB 持久化录音 =====
 let db = null;
 function openDB() {
@@ -1969,18 +2081,29 @@ async function toggleRec() {
     mediaRecorder.onstop = () => {
       const blob = new Blob(recChunks, { type: "audio/webm" });
       const url = URL.createObjectURL(blob);
-      if (!recMap[c.id]) recMap[c.id] = [];
-      const idx = recMap[c.id].length;
-      recMap[c.id].push({ url, blob, index: idx });
       btn.classList.remove("recording");
       btn.classList.add("has-rec");
       // 停止麦克风
       recStream.getTracks().forEach(t => t.stop());
-      // 写入 IndexedDB
-      dbPut(c.id, idx, blob);
-      showTip(`已录第${idx+1}段（共${recMap[c.id].length}段）`);
+
+      if (SERVER_MODE) {
+        // 服务器模式：每个词条一份录音，直接写项目 audio/ 目录
+        recMap[c.id] = [{ url: audioUrl(c.id), blob, index: 0 }];
+        curSeg = 0;
+        saveToDisk(c.id, blob)
+          .then(() => showTip(`已存盘 → audio/${c.id}.webm`))
+          .catch(() => showTip("存盘失败，请确认 server.py 仍在运行"));
+      } else {
+        // 离线模式：老行为，写 IndexedDB
+        if (!recMap[c.id]) recMap[c.id] = [];
+        const idx = recMap[c.id].length;
+        recMap[c.id].push({ url, blob, index: idx });
+        curSeg = idx;
+        dbPut(c.id, idx, blob);
+        showTip(`已录第${idx+1}段（共${recMap[c.id].length}段）`);
+      }
+
       // 刷新迷你条并自动回放
-      curSeg = idx;
       refreshRecBtn();
       if (widgetAudio) widgetAudio.play();
     };
@@ -2090,24 +2213,47 @@ function deleteSeg(i) {
   const segs = recMap[c.id] || [];
   if (!segs[i]) return;
   if (widgetAudio) { widgetAudio.pause(); widgetAudio = null; }
-  URL.revokeObjectURL(segs[i].url);
+  // 只有 blob: URL 才能 revoke，服务器模式是普通文件路径
+  if (String(segs[i].url || "").startsWith("blob:")) URL.revokeObjectURL(segs[i].url);
   segs.splice(i, 1);
   if (segs.length === 0) delete recMap[c.id];
-  // 重存IndexedDB
-  dbDel(c.id).then(() => {
-    if (recMap[c.id]) recMap[c.id].forEach((s, j) => dbPut(c.id, j, s.blob));
-  });
   curSeg = 0;
   refreshRecBtn();
-  showTip("已删除本段");
+
+  if (SERVER_MODE) {
+    deleteFromDisk(c.id)
+      .then(() => showTip(`已删除 audio/${c.id}.webm`))
+      .catch(() => showTip("删除失败，请确认 server.py 仍在运行"));
+  } else {
+    // 重存IndexedDB
+    dbDel(c.id).then(() => {
+      if (recMap[c.id]) recMap[c.id].forEach((s, j) => dbPut(c.id, j, s.blob));
+      showTip("已删除本段");
+    });
+  }
 }
 
 // 初始化
 (async () => {
+  // 先探测本地服务器：有 → 录音走项目 audio/ 目录；没有 → 退回 IndexedDB
+  const serverOn = await detectServer();
+  setModeBadge(serverOn);
+
   try {
     db = await openDB();
     await dbLoadAll();
   } catch(e) {}
+
+  if (serverOn) {
+    const { moved, failed } = await migrateToDisk();
+    if (moved || failed) {
+      setTimeout(() => showTip(
+        failed ? `已迁移 ${moved} 条到 audio/，${failed} 条失败`
+               : `已把 ${moved} 条浏览器录音迁移到 audio/`
+      ), 400);
+    }
+  }
+
   render();
   document.getElementById("viewCardBtn").classList.add("active");
   buildAlphaBar();

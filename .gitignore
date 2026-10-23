@@ -2,3 +2,6 @@ _shots/
 _backup/
 *.log
 .DS_Store
+
+# 录音写入过程中的临时文件（正常情况下瞬间被替换掉）
+audio/*.tmp
