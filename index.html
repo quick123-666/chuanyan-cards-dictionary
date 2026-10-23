@@ -2087,12 +2087,21 @@ async function toggleRec() {
       recStream.getTracks().forEach(t => t.stop());
 
       if (SERVER_MODE) {
-        // 服务器模式：每个词条一份录音，直接写项目 audio/ 目录
-        recMap[c.id] = [{ url: audioUrl(c.id), blob, index: 0 }];
+        // 服务器模式：每个词条一份录音。
+        // 这里不能立刻指向磁盘文件 —— PUT 还没落地，那样加载必然 404
+        // （NotSupportedError，表现为"录完放不出声"）。
+        // 先用 blob URL 立即可播，等存盘成功再切到磁盘文件。
+        const fileUrl = audioUrl(c.id);
+        recMap[c.id] = [{ url, blob, index: 0 }];
         curSeg = 0;
         saveToDisk(c.id, blob)
-          .then(() => showTip(`已存盘 → audio/${c.id}.webm`))
-          .catch(() => showTip("存盘失败，请确认 server.py 仍在运行"));
+          .then(() => {
+            const seg = recMap[c.id] && recMap[c.id][0];
+            // 期间没被删掉/替换过才切换，避免动到别的段
+            if (seg && seg.url === url) seg.url = fileUrl;
+            showTip(`已存盘 → audio/${c.id}.webm`);
+          })
+          .catch(() => showTip("已录好，但存盘失败：确认 server.py 在运行"));
       } else {
         // 离线模式：老行为，写 IndexedDB
         if (!recMap[c.id]) recMap[c.id] = [];
